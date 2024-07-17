@@ -1,0 +1,115 @@
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, r2_score
+
+# Load the dataset with specified encoding
+file_path = r'V:\IMDb Movies India.csv'
+data = pd.read_csv(file_path, encoding='ISO-8859-1')
+
+# Display the first few rows of the dataset
+print(data.head())
+
+# Check for missing values
+print(data.isnull().sum())
+
+# Fill missing values (example: filling NaNs in 'Genre' with 'Unknown')
+data['Genre'].fillna('Unknown', inplace=True)
+data['Director'].fillna('Unknown', inplace=True)
+data['Actors'].fillna('Unknown', inplace=True)
+
+# Drop rows with missing ratings
+data.dropna(subset=['Rating'], inplace=True)
+
+# Display the cleaned data
+print(data.head())
+
+# Visualize the distribution of movie ratings
+plt.figure(figsize=(10, 6))
+sns.histplot(data['Rating'], bins=30, kde=True)
+plt.title('Distribution of Movie Ratings')
+plt.xlabel('Rating')
+plt.ylabel('Frequency')
+plt.show()
+
+# Define features and target variable
+X = data[['Genre', 'Director', 'Actors']]
+y = data['Rating']
+
+# One-hot encode categorical variables
+column_transformer = ColumnTransformer(
+    transformers=[
+        ('genre', OneHotEncoder(), ['Genre']),
+        ('director', OneHotEncoder(), ['Director']),
+        ('actors', OneHotEncoder(), ['Actors'])
+    ],
+    remainder='drop'
+)
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Define the pipeline
+pipeline = Pipeline(steps=[
+    ('preprocessor', column_transformer),
+    ('scaler', StandardScaler(with_mean=False)),
+    ('regressor', RandomForestRegressor(n_estimators=100, random_state=42))
+])
+
+# Train the model
+pipeline.fit(X_train, y_train)
+
+# Make predictions on the test set
+y_pred = pipeline.predict(X_test)
+
+# Calculate performance metrics
+mse = mean_squared_error(y_test, y_pred)
+rmse = np.sqrt(mse)
+r2 = r2_score(y_test, y_pred)
+
+print(f'RMSE: {rmse}')
+print(f'R2 Score: {r2}')
+
+# Plot actual vs predicted ratings
+plt.figure(figsize=(10, 6))
+sns.scatterplot(x=y_test, y=y_pred)
+plt.xlabel('Actual Ratings')
+plt.ylabel('Predicted Ratings')
+plt.title('Actual vs Predicted Ratings')
+plt.show()
+
+# Extract feature importances
+feature_importances = pipeline.named_steps['regressor'].feature_importances_
+
+# Get feature names from the column transformer
+feature_names = (
+    pipeline.named_steps['preprocessor']
+    .named_transformers_['genre']
+    .get_feature_names_out(['Genre']).tolist() +
+    pipeline.named_steps['preprocessor']
+    .named_transformers_['director']
+    .get_feature_names_out(['Director']).tolist() +
+    pipeline.named_steps['preprocessor']
+    .named_transformers_['actors']
+    .get_feature_names_out(['Actors']).tolist()
+)
+
+# Create a DataFrame for feature importances
+feature_importances_df = pd.DataFrame({
+    'Feature': feature_names,
+    'Importance': feature_importances
+})
+
+# Sort and plot feature importances
+feature_importances_df.sort_values(by='Importance', ascending=False, inplace=True)
+plt.figure(figsize=(12, 8))
+sns.barplot(x='Importance', y='Feature', data=feature_importances_df)
+plt.title('Feature Importances')
+plt.show()
